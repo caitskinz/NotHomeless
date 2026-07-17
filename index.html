@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>House Hunt Rater</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1F2A24;
+    --paper: #EDEBE4;
+    --paper-raised: #F7F5F0;
+    --brass: #C08A3E;
+    --brass-dark: #9C6E2C;
+    --sage: #6E8B6E;
+    --clay: #B1503A;
+    --line: #D8D4C8;
+    --text-muted: #6B6F63;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    padding-bottom: 84px;
+  }
+  header.top {
+    padding: 28px 20px 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  header.top .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--brass-dark);
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  header.top h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 700;
+    font-size: 26px;
+    margin: 0;
+    line-height: 1.1;
+  }
+  main { padding: 20px; max-width: 520px; margin: 0 auto; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin: 18px 0 6px;
+  }
+  input[type="text"], textarea {
+    width: 100%;
+    border: 1px solid var(--line);
+    background: var(--paper-raised);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-family: 'Inter', sans-serif;
+    font-size: 16px;
+    color: var(--ink);
+  }
+  textarea { min-height: 80px; resize: vertical; }
+  input:focus, textarea:focus {
+    outline: 2px solid var(--brass);
+    outline-offset: 1px;
+  }
+
+  .criterion {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+  .criterion .name {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+  #raterName { margin-bottom: 12px; }   
+
+  .stars { display: flex; gap: 6px; }
+  .star {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 0;
+    color: var(--line);
+    font-size: 30px;
+    line-height: 1;
+    transition: color 0.15s;
+  }
+  .star.filled { color: var(--brass); }
+
+  .checklist-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .checklist-item:last-child { border-bottom: none; }
+  .checklist-item .cl-label {
+    font-size: 14px;
+    font-weight: 500;
+    flex: 1;
+  }
+  .tri-toggle { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+  .tri-toggle button {
+    border: none;
+    background: var(--paper-raised);
+    padding: 8px 12px;
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-right: 1px solid var(--line);
+  }
+  .tri-toggle button:last-child { border-right: none; }
+  .tri-toggle button.sel-yes { background: var(--sage); color: #fff; }
+  .tri-toggle button.sel-no { background: var(--clay); color: #fff; }
+  .tri-toggle button.sel-unsure { background: var(--line); color: var(--ink); }
+
+  .checklist-card {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 4px 16px;
+    margin: 6px 0 18px;
+  }
+
+  .submit-btn {
+    width: 100%;
+    background: var(--ink);
+    color: var(--paper-raised);
+    border: none;
+    border-radius: 10px;
+    padding: 16px;
+    font-size: 16px;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    margin-top: 24px;
+    cursor: pointer;
+  }
+  .submit-btn:active { background: var(--brass-dark); }
+  .submit-btn:disabled { opacity: 0.5; }
+
+  .toast {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    background: var(--ink);
+    color: var(--paper-raised);
+    padding: 12px 20px;
+    border-radius: 30px;
+    font-size: 14px;
+    font-weight: 500;
+    opacity: 0;
+    transition: opacity 0.25s, transform 0.25s;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* Compare view */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+  }
+  .empty-state .stamp-icon { font-size: 40px; margin-bottom: 12px; }
+
+  .property-card {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .property-card summary {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px;
+    cursor: pointer;
+  }
+  .property-card summary::-webkit-details-marker { display: none; }
+  .stamp {
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 2.5px solid var(--brass);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    transform: rotate(-6deg);
+    font-family: 'Fraunces', serif;
+    color: var(--brass-dark);
+  }
+  .stamp .num { font-size: 20px; font-weight: 700; line-height: 1; }
+  .stamp .of5 { font-size: 8px; letter-spacing: 0.05em; text-transform: uppercase; margin-top: 1px; }
+  .card-title { flex: 1; min-width: 0; }
+  .card-title .addr {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 16px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .card-title .meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .chevron { font-size: 18px; color: var(--text-muted); transition: transform 0.2s; }
+  details[open] .chevron { transform: rotate(90deg); }
+
+  .card-detail { padding: 0 16px 16px; border-top: 1px solid var(--line); }
+  .breakdown { margin-top: 12px; }
+  .breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    padding: 5px 0;
+  }
+  .breakdown-row .bar-bg {
+    flex: 1;
+    height: 5px;
+    background: var(--line);
+    border-radius: 3px;
+    margin: 0 10px;
+    overflow: hidden;
+  }
+  .breakdown-row .bar-fill {
+    height: 100%;
+    background: var(--sage);
+    border-radius: 3px;
+  }
+  .rater-note {
+    background: var(--paper);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-top: 8px;
+    font-size: 13px;
+  }
+  .rater-note .who { font-weight: 600; margin-bottom: 3px; }
+  .rater-note .who .score { color: var(--brass-dark); font-weight: 700; }
+
+  .checklist-summary {
+    margin-top: 14px;
+    border-top: 1px solid var(--line);
+    padding-top: 10px;
+  }
+  .checklist-summary .cl-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .cl-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    padding: 5px 0;
+  }
+  .cl-verdict {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+    margin-left: 10px;
+  }
+  .cl-verdict.yes { background: var(--sage); }
+  .cl-verdict.no { background: var(--clay); }
+  .cl-verdict.unsure { background: var(--line); color: var(--text-muted); }
+
+  /* Bottom nav */
+  nav.tabs {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    display: flex;
+    background: var(--paper-raised);
+    border-top: 1px solid var(--line);
+    padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+  }
+  nav.tabs button {
+    flex: 1;
+    background: none;
+    border: none;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    padding: 8px 0 4px;
+    cursor: pointer;
+  }
+  nav.tabs button .icon { display: block; font-size: 20px; margin-bottom: 2px; }
+  nav.tabs button.active { color: var(--ink); }
+  nav.tabs button.active .icon { color: var(--brass-dark); }
+
+  .config-warning {
+    background: #F3E3D3;
+    border: 1px solid var(--brass);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="eyebrow">We buying huose?</div>
+  <h1 id="pageTitle">Log a viewing</h1>
+</header>
+
+<main>
+  <div id="configWarning" class="config-warning" style="display:none;">
+    Set your Apps Script Web App URL in the <code>SCRIPT_URL</code> constant near the top of the script before this works.
+  </div>
+
+  <!-- RATE VIEW -->
+  <section class="view active" id="view-rate">
+    <label for="propertyAddress">Property address</label>
+    <input type="text" id="propertyAddress" placeholder="12 Example St, Wellington">
+
+    <label for="raterName">Your name</label>
+    <input type="text" id="raterName" placeholder="e.g. Caitlin">
+
+    <div id="criteria"></div>
+
+    <label>Checklist</label>
+    <div class="checklist-card" id="checklist"></div>
+
+    <label for="notes">Notes</label>
+    <textarea id="notes" placeholder="Anything worth remembering — damp smell in the wardrobe, great morning sun, noisy road..."></textarea>
+
+    <button class="submit-btn" id="submitBtn">Save rating</button>
+  </section>
+
+  <!-- COMPARE VIEW -->
+  <section class="view" id="view-compare">
+    <div id="compareList"></div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<nav class="tabs">
+  <button class="active" data-view="rate">
+    <span class="icon">&#9998;</span>Rate
+  </button>
+  <button data-view="compare">
+    <span class="icon">&#9878;</span>Compare
+  </button>
+</nav>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────
+// Paste your Apps Script Web App URL here (see Code.gs setup instructions)
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzkQaE5oA4eHOZh20Zkb1zao0jpBQ3b6JcU7X9v9vURQO4Bbag2jmA05EEwp7_7usrR9w/exec';
+// ────────────────────────────────────────────────────────
+
+const CRITERIA = [
+  { key: 'sunOrientation', label: 'Sun & Orientation' },
+  { key: 'landSite', label: 'Land & Site' },
+  { key: 'houseCondition', label: 'House Condition' },
+  { key: 'location', label: 'Location' },
+  { key: 'value', label: 'Value for Price' },
+  { key: 'gutFeel', label: 'Gut Feel' }
+];
+
+const CRITERIA_HEADER_MAP = {
+  sunOrientation: 'Sun & Orientation',
+  landSite: 'Land & Site',
+  houseCondition: 'House Condition',
+  location: 'Location',
+  value: 'Value',
+  gutFeel: 'Gut Feel'
+};
+
+const CHECKLIST = [
+  { key: 'bedrooms4', label: '4+ bedrooms', header: '4+ Bedrooms' },
+  { key: 'builtInWardrobes', label: 'Built-in wardrobes', header: 'Built-in Wardrobes' },
+  { key: 'roomsGoodSize', label: 'All rooms good size', header: 'Rooms Good Size' },
+  { key: 'offStreetParking', label: 'Off-street parking / garage', header: 'Off-street Parking' },
+  { key: 'separateLiving', label: 'Separate living areas', header: 'Separate Living Areas' },
+  { key: 'northFacing', label: 'North-facing living/outdoor', header: 'North-facing Living/Outdoor' },
+  { key: 'doubleGlazing', label: 'Double glazing', header: 'Double Glazing' },
+  { key: 'heating', label: 'Heat pump / fixed heating', header: 'Heating' },
+  { key: 'storage', label: 'Good storage (linen, shed)', header: 'Good Storage' },
+  { key: 'extraToilet', label: 'Second bathroom / extra toilet', header: 'Extra Bathroom/Toilet' },
+  { key: 'fencedSection', label: 'Fenced section', header: 'Fenced Section' },
+  { key: 'modernKitchenBath', label: 'Modern kitchen & bathroom', header: 'Modern Kitchen & Bathroom' }
+];
+
+const ratings = {}; // in-memory, per criterion score for current form
+const checklist = {}; // in-memory, tri-state per item for current form
+
+function buildCriteriaUI() {
+  const container = document.getElementById('criteria');
+  container.innerHTML = CRITERIA.map(c => `
+    <div class="criterion" data-key="${c.key}">
+      <div class="name">${c.label}</div>
+      <div class="stars">
+        ${[1,2,3,4,5].map(n => `<button type="button" class="star" data-value="${n}">&#9733;</button>`).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.criterion').forEach(crit => {
+    const key = crit.dataset.key;
+    ratings[key] = 0;
+    crit.querySelectorAll('.star').forEach(star => {
+      star.addEventListener('click', () => {
+        const value = Number(star.dataset.value);
+        ratings[key] = value;
+        crit.querySelectorAll('.star').forEach(s => {
+          s.classList.toggle('filled', Number(s.dataset.value) <= value);
+        });
+      });
+    });
+  });
+}
+
+function buildChecklistUI() {
+  const container = document.getElementById('checklist');
+  container.innerHTML = CHECKLIST.map(c => `
+    <div class="checklist-item" data-key="${c.key}">
+      <span class="cl-label">${c.label}</span>
+      <div class="tri-toggle">
+        <button type="button" data-value="yes">&#10003;</button>
+        <button type="button" data-value="unsure">?</button>
+        <button type="button" data-value="no">&#10005;</button>
+      </div>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.checklist-item').forEach(item => {
+    const key = item.dataset.key;
+    checklist[key] = 'unsure';
+    item.querySelectorAll('.tri-toggle button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const value = btn.dataset.value;
+        checklist[key] = value;
+        item.querySelectorAll('.tri-toggle button').forEach(b => {
+          b.classList.remove('sel-yes', 'sel-no', 'sel-unsure');
+        });
+        btn.classList.add('sel-' + value);
+      });
+    });
+  });
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+async function submitRating() {
+  const propertyAddress = document.getElementById('propertyAddress').value.trim();
+  const raterName = document.getElementById('raterName').value.trim();
+  const notes = document.getElementById('notes').value.trim();
+
+  if (!propertyAddress || !raterName) {
+    showToast('Add an address and your name first');
+    return;
+  }
+  if (Object.values(ratings).some(v => v === 0)) {
+    showToast('Rate every category before saving');
+    return;
+  }
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  try {
+    await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ propertyAddress, raterName, notes, ...ratings, ...checklist })
+    });
+    showToast('Rating saved');
+    document.getElementById('propertyAddress').value = '';
+    document.getElementById('notes').value = '';
+    buildCriteriaUI();
+    buildChecklistUI();
+  } catch (err) {
+    showToast('Could not save — check connection');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save rating';
+  }
+}
+
+async function loadCompareView() {
+  const listEl = document.getElementById('compareList');
+  listEl.innerHTML = '<div class="empty-state">Loading...</div>';
+
+  try {
+    const res = await fetch(SCRIPT_URL);
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error);
+    renderCompare(json.data);
+  } catch (err) {
+    listEl.innerHTML = `<div class="empty-state"><div class="stamp-icon">&#9888;</div>Couldn't load ratings.<br>Check the Apps Script URL is set correctly.</div>`;
+  }
+}
+
+function renderCompare(rows) {
+  const listEl = document.getElementById('compareList');
+  if (!rows.length) {
+    listEl.innerHTML = `<div class="empty-state"><div class="stamp-icon">&#127968;</div>No ratings yet.<br>Go rate your first open home.</div>`;
+    return;
+  }
+
+  const grouped = {};
+  rows.forEach(r => {
+    const addr = r['Property Address'];
+    if (!grouped[addr]) grouped[addr] = [];
+    grouped[addr].push(r);
+  });
+
+  const properties = Object.entries(grouped).map(([address, entries]) => {
+    const avgFor = (label) => entries.reduce((sum, e) => sum + Number(e[label] || 0), 0) / entries.length;
+    const breakdown = Object.entries(CRITERIA_HEADER_MAP).map(([key, header]) => {
+      const criterion = CRITERIA.find(c => c.key === key);
+      return { label: criterion.label, avg: avgFor(header) };
+    });
+    const overall = breakdown.reduce((s, b) => s + b.avg, 0) / breakdown.length;
+
+    const checklistSummary = CHECKLIST.map(c => {
+      const counts = { yes: 0, no: 0, unsure: 0 };
+      entries.forEach(e => {
+        const val = (e[c.header] || 'unsure').toLowerCase();
+        if (counts[val] !== undefined) counts[val]++;
+      });
+      let verdict = 'unsure';
+      if (counts.yes > counts.no && counts.yes >= counts.unsure) verdict = 'yes';
+      else if (counts.no > counts.yes && counts.no >= counts.unsure) verdict = 'no';
+      return { label: c.label, verdict, counts };
+    });
+
+    return { address, entries, breakdown, overall, checklistSummary };
+  });
+
+  properties.sort((a, b) => b.overall - a.overall);
+
+  listEl.innerHTML = properties.map(p => `
+    <details class="property-card">
+      <summary>
+        <div class="stamp"><span class="num">${p.overall.toFixed(1)}</span><span class="of5">of 5</span></div>
+        <div class="card-title">
+          <div class="addr">${escapeHtml(p.address)}</div>
+          <div class="meta">${p.entries.length} rating${p.entries.length > 1 ? 's' : ''}</div>
+        </div>
+        <div class="chevron">&#8250;</div>
+      </summary>
+      <div class="card-detail">
+        <div class="breakdown">
+          ${p.breakdown.map(b => `
+            <div class="breakdown-row">
+              <span>${b.label}</span>
+              <span class="bar-bg"><span class="bar-fill" style="width:${(b.avg/5*100)}%"></span></span>
+              <span>${b.avg.toFixed(1)}</span>
+            </div>
+          `).join('')}
+        </div>
+        <div class="checklist-summary">
+          <div class="cl-title">Checklist</div>
+          ${p.checklistSummary.map(c => `
+            <div class="cl-row">
+              <span>${c.label}</span>
+              <span class="cl-verdict ${c.verdict}">${c.verdict === 'yes' ? '&#10003;' : c.verdict === 'no' ? '&#10005;' : '?'}</span>
+            </div>
+          `).join('')}
+        </div>
+        ${p.entries.map(e => `
+          <div class="rater-note">
+            <div class="who">${escapeHtml(e['Rater Name'])} <span class="score">${(CRITERIA.reduce((s,c) => {
+              return s + Number(e[CRITERIA_HEADER_MAP[c.key]] || 0);
+            }, 0) / CRITERIA.length).toFixed(1)}/5</span></div>
+            ${e.Notes ? escapeHtml(e.Notes) : '<em>No notes</em>'}
+          </div>
+        `).join('')}
+      </div>
+    </details>
+  `).join('');
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str || '';
+  return div.innerHTML;
+}
+
+// Tab switching
+document.querySelectorAll('nav.tabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('nav.tabs button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const view = btn.dataset.view;
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-' + view).classList.add('active');
+    document.getElementById('pageTitle').textContent = view === 'rate' ? 'Rate a home' : 'Compare homes';
+    if (view === 'compare') loadCompareView();
+  });
+});
+
+document.getElementById('submitBtn').addEventListener('click', submitRating);
+
+if (SCRIPT_URL.indexOf('PASTE_YOUR') === 0) {
+  document.getElementById('configWarning').style.display = 'block';
+}
+
+buildCriteriaUI();
+buildChecklistUI();
+</script>
+
+</body>
+</html>
