@@ -50,6 +50,8 @@
   .view { display: none; }
   .view.active { display: block; }
 
+  #raterName { margin-bottom: 10px; }
+
   label {
     display: block;
     font-size: 13px;
@@ -66,6 +68,42 @@
     font-family: 'Inter', sans-serif;
     font-size: 16px;
     color: var(--ink);
+  }
+  .address-field { position: relative; }
+  .address-status {
+    font-size: 12px;
+    margin-top: 5px;
+    font-weight: 500;
+  }
+  .address-status.verified { color: var(--sage); }
+  .address-status.unverified { color: var(--text-muted); }
+  .address-suggestions {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+    z-index: 10;
+    max-height: 240px;
+    overflow-y: auto;
+    display: none;
+  }
+  .address-suggestions.show { display: block; }
+  .address-suggestions .suggestion {
+    padding: 12px 14px;
+    font-size: 14px;
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+  }
+  .address-suggestions .suggestion:last-child { border-bottom: none; }
+  .address-suggestions .suggestion:active { background: var(--paper); }
+  .address-suggestions .suggestion-loading {
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--text-muted);
   }
   textarea { min-height: 80px; resize: vertical; }
   input:focus, textarea:focus {
@@ -85,8 +123,6 @@
     font-size: 14px;
     margin-bottom: 8px;
   }
-  #raterName { margin-bottom: 12px; }   
-
   .stars { display: flex; gap: 6px; }
   .star {
     width: 36px;
@@ -333,8 +369,8 @@
 <body>
 
 <header class="top">
-  <div class="eyebrow">We buying huose?</div>
-  <h1 id="pageTitle">Log a viewing</h1>
+  <div class="eyebrow">House Hunt</div>
+  <h1 id="pageTitle">Rate a home</h1>
 </header>
 
 <main>
@@ -345,7 +381,11 @@
   <!-- RATE VIEW -->
   <section class="view active" id="view-rate">
     <label for="propertyAddress">Property address</label>
-    <input type="text" id="propertyAddress" placeholder="12 Example St, Wellington">
+    <div class="address-field">
+      <input type="text" id="propertyAddress" placeholder="12 Example St, Wellington" autocomplete="off">
+      <div class="address-suggestions" id="addressSuggestions"></div>
+    </div>
+    <div class="address-status" id="addressStatus"></div>
 
     <label for="raterName">Your name</label>
     <input type="text" id="raterName" placeholder="e.g. Caitlin">
@@ -381,7 +421,7 @@
 <script>
 // ── CONFIG ──────────────────────────────────────────────
 // Paste your Apps Script Web App URL here (see Code.gs setup instructions)
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzkQaE5oA4eHOZh20Zkb1zao0jpBQ3b6JcU7X9v9vURQO4Bbag2jmA05EEwp7_7usrR9w/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbztj3bbzAsTbq_y-jWFPW7twrOKCQ4r1Z5NR2lq1yMehj_hFw2JbFCjcbZVjH-4xaERxw/exec';
 // ────────────────────────────────────────────────────────
 
 const CRITERIA = [
@@ -475,6 +515,83 @@ function buildChecklistUI() {
   });
 }
 
+// ── Address autocomplete (OpenStreetMap Nominatim, no API key needed) ──
+let addressVerified = false;
+let addressDebounce = null;
+
+function setupAddressAutocomplete() {
+  const input = document.getElementById('propertyAddress');
+  const suggestionsBox = document.getElementById('addressSuggestions');
+  const statusEl = document.getElementById('addressStatus');
+
+  input.addEventListener('input', () => {
+    addressVerified = false;
+    statusEl.textContent = '';
+    statusEl.className = 'address-status';
+    const query = input.value.trim();
+
+    clearTimeout(addressDebounce);
+    if (query.length < 4) {
+      suggestionsBox.classList.remove('show');
+      suggestionsBox.innerHTML = '';
+      return;
+    }
+
+    suggestionsBox.innerHTML = '<div class="suggestion-loading">Searching...</div>';
+    suggestionsBox.classList.add('show');
+
+    addressDebounce = setTimeout(() => fetchAddressSuggestions(query), 400);
+  });
+
+  // Hide dropdown on outside click; small delay so a tap on a suggestion still registers
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.address-field')) {
+      suggestionsBox.classList.remove('show');
+    }
+  });
+
+  input.addEventListener('blur', () => {
+    setTimeout(() => {
+      if (!addressVerified && input.value.trim().length > 0) {
+        statusEl.textContent = 'Not matched to a listed address — check the spelling, or pick a suggestion';
+        statusEl.className = 'address-status unverified';
+      }
+    }, 200);
+  });
+}
+
+async function fetchAddressSuggestions(query) {
+  const suggestionsBox = document.getElementById('addressSuggestions');
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&countrycodes=nz&limit=5&q=${encodeURIComponent(query)}`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'en-NZ' } });
+    const results = await res.json();
+
+    if (!results.length) {
+      suggestionsBox.innerHTML = '<div class="suggestion-loading">No matches — you can still type it manually</div>';
+      return;
+    }
+
+    suggestionsBox.innerHTML = results.map((r, i) => `
+      <div class="suggestion" data-index="${i}">${escapeHtml(r.display_name)}</div>
+    `).join('');
+
+    suggestionsBox.querySelectorAll('.suggestion').forEach(el => {
+      el.addEventListener('click', () => {
+        const r = results[Number(el.dataset.index)];
+        document.getElementById('propertyAddress').value = r.display_name;
+        addressVerified = true;
+        const statusEl = document.getElementById('addressStatus');
+        statusEl.textContent = '✓ Matched address';
+        statusEl.className = 'address-status verified';
+        suggestionsBox.classList.remove('show');
+      });
+    });
+  } catch (err) {
+    suggestionsBox.innerHTML = '<div class="suggestion-loading">Couldn\'t reach address lookup — you can still type it manually</div>';
+  }
+}
+
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -503,11 +620,14 @@ async function submitRating() {
   try {
     await fetch(SCRIPT_URL, {
       method: 'POST',
-      body: JSON.stringify({ propertyAddress, raterName, notes, ...ratings, ...checklist })
+      body: JSON.stringify({ propertyAddress, raterName, notes, addressVerified, ...ratings, ...checklist })
     });
     showToast('Rating saved');
     document.getElementById('propertyAddress').value = '';
     document.getElementById('notes').value = '';
+    document.getElementById('addressStatus').textContent = '';
+    document.getElementById('addressStatus').className = 'address-status';
+    addressVerified = false;
     buildCriteriaUI();
     buildChecklistUI();
   } catch (err) {
@@ -640,6 +760,7 @@ if (SCRIPT_URL.indexOf('PASTE_YOUR') === 0) {
 
 buildCriteriaUI();
 buildChecklistUI();
+setupAddressAutocomplete();
 </script>
 
 </body>
