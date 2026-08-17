@@ -59,7 +59,7 @@
     color: var(--text-muted);
     margin: 18px 0 6px;
   }
-  input[type="text"], input[type="date"], input[type="time"], textarea {
+  input[type="text"], input[type="url"], input[type="date"], input[type="time"], textarea {
     width: 100%;
     border: 1px solid var(--line);
     background: var(--paper-raised);
@@ -349,6 +349,13 @@
   .add-viewing-card summary::-webkit-details-marker { display: none; }
   .add-viewing-body { padding: 0 16px 16px; border-top: 1px solid var(--line); }
   .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .input-row > div { min-width: 0; }
+  .input-row input { min-width: 0; max-width: 100%; }
+  @media (max-width: 440px) {
+    .input-row { grid-template-columns: 1fr; gap: 0; }
+    .add-viewing-body { padding-left: 14px; padding-right: 14px; }
+    input[type="date"], input[type="time"] { min-height: 48px; }
+  }
   .section-heading {
     font-family: 'Fraunces', serif;
     font-size: 18px;
@@ -383,6 +390,15 @@
   .viewing-address { font-weight: 600; font-size: 14px; line-height: 1.35; }
   .viewing-meta { color: var(--text-muted); font-size: 12px; margin-top: 4px; }
   .viewing-notes { font-size: 13px; margin-top: 10px; }
+  .viewing-link {
+    display: inline-block;
+    margin-top: 10px;
+    color: var(--brass-dark);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .viewing-link:hover, .viewing-link:focus { text-decoration: underline; }
   .remove-viewing {
     margin-top: 10px;
     border: none;
@@ -498,6 +514,9 @@
           </div>
         </div>
 
+        <label for="viewingUrl">Listing webpage <span style="font-weight:400;">(optional)</span></label>
+        <input type="url" id="viewingUrl" inputmode="url" autocomplete="url" placeholder="trademe.co.nz/a/property/...">
+
         <label for="viewingNotes">Notes</label>
         <textarea id="viewingNotes" placeholder="Agent name, auction date, anything to check beforehand..."></textarea>
 
@@ -532,7 +551,7 @@
 <script>
 // ── CONFIG ──────────────────────────────────────────────
 // Paste your Apps Script Web App URL here (see Code.gs setup instructions)
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyImyJUvCssmxFOflj2inbxqMLyH0wWpPjjLagUQ2Ef6rf7iZAyC_tr3rkE1O-YQfDeFA/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyJ7fck_xpVDrxAevIZf20OQvGanGI6ZC7DlRzpl5afUFyz8gdSC1EZhWpYm-xGV7DVdg/exec';
 // ────────────────────────────────────────────────────────
 
 const CRITERIA = [
@@ -759,10 +778,16 @@ async function submitViewing() {
   const startTime = document.getElementById('viewingStartTime').value;
   const endTime = document.getElementById('viewingEndTime').value;
   const addedBy = document.getElementById('viewingAddedBy').value.trim();
+  const listingUrlInput = document.getElementById('viewingUrl').value.trim();
+  const listingUrl = normalizeListingUrl(listingUrlInput);
   const notes = document.getElementById('viewingNotes').value.trim();
 
   if (!propertyAddress || !viewingDate || !startTime) {
     showToast('Add an address, date and start time');
+    return;
+  }
+  if (listingUrlInput && !listingUrl) {
+    showToast('Check the listing webpage link');
     return;
   }
 
@@ -781,6 +806,7 @@ async function submitViewing() {
         startTime,
         endTime,
         addedBy,
+        listingUrl,
         notes
       })
     });
@@ -792,6 +818,7 @@ async function submitViewing() {
     document.getElementById('viewingDate').value = '';
     document.getElementById('viewingStartTime').value = '';
     document.getElementById('viewingEndTime').value = '';
+    document.getElementById('viewingUrl').value = '';
     document.getElementById('viewingNotes').value = '';
     viewingAddressLookup.reset();
     document.getElementById('addViewingCard').open = false;
@@ -846,12 +873,29 @@ function renderUpcomingViewings(rows) {
                 ${v['Added By'] ? `<div class="viewing-meta">Added by ${escapeHtml(v['Added By'])}</div>` : ''}
               </div>
             </div>
+            ${safeListingUrl(v['Listing URL']) ? `<a class="viewing-link" href="${escapeHtml(safeListingUrl(v['Listing URL']))}" target="_blank" rel="noopener noreferrer">Open listing &#8599;</a>` : ''}
             ${v.Notes ? `<div class="viewing-notes">${escapeHtml(v.Notes)}</div>` : ''}
             <button type="button" class="remove-viewing" onclick="removeViewing('${v.ID}')">Remove</button>
           </div>`;
       }).join('')}
     </div>
   `).join('');
+}
+
+function normalizeListingUrl(value) {
+  if (!value) return '';
+  let candidate = value.trim();
+  if (!/^https?:\/\//i.test(candidate)) candidate = 'https://' + candidate;
+  try {
+    const url = new URL(candidate);
+    return (url.protocol === 'http:' || url.protocol === 'https:') ? url.href : '';
+  } catch (err) {
+    return '';
+  }
+}
+
+function safeListingUrl(value) {
+  return normalizeListingUrl(String(value || ''));
 }
 
 function formatViewingDate(dateStr) {
