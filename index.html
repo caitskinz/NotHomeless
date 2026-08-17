@@ -375,10 +375,34 @@
     background: var(--paper-raised);
     border: 1px solid var(--line);
     border-radius: 12px;
-    padding: 14px 16px;
     margin-bottom: 10px;
+    overflow: hidden;
   }
-  .viewing-card-head { display: flex; gap: 12px; align-items: flex-start; }
+  .viewing-card summary {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .viewing-card summary::-webkit-details-marker { display: none; }
+  .viewing-card summary:focus-visible { outline: 2px solid var(--brass); outline-offset: -2px; }
+  .viewing-card-head { display: flex; gap: 12px; align-items: flex-start; flex: 1; min-width: 0; }
+  .viewing-card-main { flex: 1; min-width: 0; }
+  .viewing-chevron {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    font-size: 20px;
+    line-height: 1;
+    transition: transform 0.2s;
+  }
+  .viewing-card[open] .viewing-chevron { transform: rotate(90deg); }
+  .viewing-details {
+    border-top: 1px solid var(--line);
+    padding: 12px 16px 14px;
+  }
   .viewing-time {
     flex-shrink: 0;
     min-width: 68px;
@@ -551,7 +575,7 @@
 <script>
 // ── CONFIG ──────────────────────────────────────────────
 // Paste your Apps Script Web App URL here (see Code.gs setup instructions)
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyJ7fck_xpVDrxAevIZf20OQvGanGI6ZC7DlRzpl5afUFyz8gdSC1EZhWpYm-xGV7DVdg/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzZ50xcziM1YkrjkEkVhKMXw-80hSXlpO3ztbQefl1CSotm7sB9Qfryk4fsf-CTWUdKHA/exec';
 // ────────────────────────────────────────────────────────
 
 const CRITERIA = [
@@ -865,18 +889,24 @@ function renderUpcomingViewings(rows) {
       ${entries.map(v => {
         const time = v['End Time'] ? `${formatViewingTime(v['Start Time'])}–${formatViewingTime(v['End Time'])}` : formatViewingTime(v['Start Time']);
         return `
-          <div class="viewing-card">
-            <div class="viewing-card-head">
-              <div class="viewing-time">${escapeHtml(time)}</div>
-              <div>
-                <div class="viewing-address">${escapeHtml(v['Property Address'])}</div>
-                ${v['Added By'] ? `<div class="viewing-meta">Added by ${escapeHtml(v['Added By'])}</div>` : ''}
+          <details class="viewing-card">
+            <summary>
+              <div class="viewing-card-head">
+                <div class="viewing-time">${escapeHtml(time)}</div>
+                <div class="viewing-card-main">
+                  <div class="viewing-address">${escapeHtml(v['Property Address'])}</div>
+                  <div class="viewing-meta">Tap to see details</div>
+                </div>
               </div>
+              <div class="viewing-chevron">&#8250;</div>
+            </summary>
+            <div class="viewing-details">
+              ${v['Added By'] ? `<div class="viewing-meta">Added by ${escapeHtml(v['Added By'])}</div>` : ''}
+              ${safeListingUrl(v['Listing URL']) ? `<a class="viewing-link" href="${escapeHtml(safeListingUrl(v['Listing URL']))}" target="_blank" rel="noopener noreferrer">Open listing &#8599;</a>` : '<div class="viewing-meta">No listing link saved</div>'}
+              ${v.Notes ? `<div class="viewing-notes">${escapeHtml(v.Notes)}</div>` : '<div class="viewing-notes"><em>No notes added</em></div>'}
+              <button type="button" class="remove-viewing" onclick="removeViewing('${v.ID}')">Remove viewing</button>
             </div>
-            ${safeListingUrl(v['Listing URL']) ? `<a class="viewing-link" href="${escapeHtml(safeListingUrl(v['Listing URL']))}" target="_blank" rel="noopener noreferrer">Open listing &#8599;</a>` : ''}
-            ${v.Notes ? `<div class="viewing-notes">${escapeHtml(v.Notes)}</div>` : ''}
-            <button type="button" class="remove-viewing" onclick="removeViewing('${v.ID}')">Remove</button>
-          </div>`;
+          </details>`;
       }).join('')}
     </div>
   `).join('');
