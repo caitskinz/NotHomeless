@@ -59,7 +59,7 @@
     color: var(--text-muted);
     margin: 18px 0 6px;
   }
-  input[type="text"], textarea {
+  input[type="text"], input[type="date"], input[type="time"], textarea {
     width: 100%;
     border: 1px solid var(--line);
     background: var(--paper-raised);
@@ -332,6 +332,69 @@
   .cl-verdict.no { background: var(--clay); }
   .cl-verdict.unsure { background: var(--line); color: var(--text-muted); }
 
+  /* Upcoming viewings */
+  .add-viewing-card {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    margin-bottom: 22px;
+    overflow: hidden;
+  }
+  .add-viewing-card summary {
+    list-style: none;
+    padding: 15px 16px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .add-viewing-card summary::-webkit-details-marker { display: none; }
+  .add-viewing-body { padding: 0 16px 16px; border-top: 1px solid var(--line); }
+  .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .section-heading {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-weight: 700;
+    margin: 8px 0 12px;
+  }
+  .viewing-day { margin-bottom: 22px; }
+  .viewing-day-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .viewing-card {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+  .viewing-card-head { display: flex; gap: 12px; align-items: flex-start; }
+  .viewing-time {
+    flex-shrink: 0;
+    min-width: 68px;
+    font-family: 'Fraunces', serif;
+    color: var(--brass-dark);
+    font-weight: 700;
+    font-size: 16px;
+  }
+  .viewing-address { font-weight: 600; font-size: 14px; line-height: 1.35; }
+  .viewing-meta { color: var(--text-muted); font-size: 12px; margin-top: 4px; }
+  .viewing-notes { font-size: 13px; margin-top: 10px; }
+  .remove-viewing {
+    margin-top: 10px;
+    border: none;
+    background: none;
+    color: var(--clay);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 0;
+    cursor: pointer;
+  }
+
   /* Bottom nav */
   nav.tabs {
     position: fixed;
@@ -401,6 +464,51 @@
     <button class="submit-btn" id="submitBtn">Save rating</button>
   </section>
 
+  <!-- UPCOMING VIEWINGS -->
+  <section class="view" id="view-upcoming">
+    <details class="add-viewing-card" id="addViewingCard">
+      <summary>+ Add a viewing</summary>
+      <div class="add-viewing-body">
+        <label for="viewingAddress">Property address</label>
+        <div class="address-field">
+          <input type="text" id="viewingAddress" placeholder="12 Example St, Wellington" autocomplete="off">
+          <div class="address-suggestions" id="viewingAddressSuggestions"></div>
+        </div>
+        <div class="address-status" id="viewingAddressStatus"></div>
+
+        <div class="input-row">
+          <div>
+            <label for="viewingDate">Date</label>
+            <input type="date" id="viewingDate">
+          </div>
+          <div>
+            <label for="viewingStartTime">Start time</label>
+            <input type="time" id="viewingStartTime">
+          </div>
+        </div>
+
+        <div class="input-row">
+          <div>
+            <label for="viewingEndTime">End time</label>
+            <input type="time" id="viewingEndTime">
+          </div>
+          <div>
+            <label for="viewingAddedBy">Added by</label>
+            <input type="text" id="viewingAddedBy" placeholder="e.g. Caitlin">
+          </div>
+        </div>
+
+        <label for="viewingNotes">Notes</label>
+        <textarea id="viewingNotes" placeholder="Agent name, auction date, anything to check beforehand..."></textarea>
+
+        <button class="submit-btn" id="saveViewingBtn">Save viewing</button>
+      </div>
+    </details>
+
+    <div class="section-heading">Coming up</div>
+    <div id="upcomingList"></div>
+  </section>
+
   <!-- COMPARE VIEW -->
   <section class="view" id="view-compare">
     <div id="compareList"></div>
@@ -413,6 +521,9 @@
   <button class="active" data-view="rate">
     <span class="icon">&#9998;</span>Rate
   </button>
+  <button data-view="upcoming">
+    <span class="icon">&#128197;</span>Upcoming
+  </button>
   <button data-view="compare">
     <span class="icon">&#9878;</span>Compare
   </button>
@@ -421,7 +532,7 @@
 <script>
 // ── CONFIG ──────────────────────────────────────────────
 // Paste your Apps Script Web App URL here (see Code.gs setup instructions)
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbztj3bbzAsTbq_y-jWFPW7twrOKCQ4r1Z5NR2lq1yMehj_hFw2JbFCjcbZVjH-4xaERxw/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyImyJUvCssmxFOflj2inbxqMLyH0wWpPjjLagUQ2Ef6rf7iZAyC_tr3rkE1O-YQfDeFA/exec';
 // ────────────────────────────────────────────────────────
 
 const CRITERIA = [
@@ -516,21 +627,20 @@ function buildChecklistUI() {
 }
 
 // ── Address autocomplete (OpenStreetMap Nominatim, no API key needed) ──
-let addressVerified = false;
-let addressDebounce = null;
-
-function setupAddressAutocomplete() {
-  const input = document.getElementById('propertyAddress');
-  const suggestionsBox = document.getElementById('addressSuggestions');
-  const statusEl = document.getElementById('addressStatus');
+function setupAddressAutocomplete(inputId, suggestionsId, statusId) {
+  const input = document.getElementById(inputId);
+  const suggestionsBox = document.getElementById(suggestionsId);
+  const statusEl = document.getElementById(statusId);
+  let verified = false;
+  let debounce = null;
 
   input.addEventListener('input', () => {
-    addressVerified = false;
+    verified = false;
     statusEl.textContent = '';
     statusEl.className = 'address-status';
     const query = input.value.trim();
 
-    clearTimeout(addressDebounce);
+    clearTimeout(debounce);
     if (query.length < 4) {
       suggestionsBox.classList.remove('show');
       suggestionsBox.innerHTML = '';
@@ -539,57 +649,64 @@ function setupAddressAutocomplete() {
 
     suggestionsBox.innerHTML = '<div class="suggestion-loading">Searching...</div>';
     suggestionsBox.classList.add('show');
-
-    addressDebounce = setTimeout(() => fetchAddressSuggestions(query), 400);
+    debounce = setTimeout(() => fetchSuggestions(query), 400);
   });
 
-  // Hide dropdown on outside click; small delay so a tap on a suggestion still registers
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('.address-field')) {
+    if (!e.target.closest(`#${inputId}`) && !e.target.closest(`#${suggestionsId}`)) {
       suggestionsBox.classList.remove('show');
     }
   });
 
   input.addEventListener('blur', () => {
     setTimeout(() => {
-      if (!addressVerified && input.value.trim().length > 0) {
+      if (!verified && input.value.trim().length > 0) {
         statusEl.textContent = 'Not matched to a listed address — check the spelling, or pick a suggestion';
         statusEl.className = 'address-status unverified';
       }
     }, 200);
   });
-}
 
-async function fetchAddressSuggestions(query) {
-  const suggestionsBox = document.getElementById('addressSuggestions');
-  try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&countrycodes=nz&limit=5&q=${encodeURIComponent(query)}`;
-    const res = await fetch(url, { headers: { 'Accept-Language': 'en-NZ' } });
-    const results = await res.json();
+  async function fetchSuggestions(query) {
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&countrycodes=nz&limit=5&q=${encodeURIComponent(query)}`;
+      const res = await fetch(url, { headers: { 'Accept-Language': 'en-NZ' } });
+      const results = await res.json();
 
-    if (!results.length) {
-      suggestionsBox.innerHTML = '<div class="suggestion-loading">No matches — you can still type it manually</div>';
-      return;
-    }
+      if (!results.length) {
+        suggestionsBox.innerHTML = '<div class="suggestion-loading">No matches — you can still type it manually</div>';
+        return;
+      }
 
-    suggestionsBox.innerHTML = results.map((r, i) => `
-      <div class="suggestion" data-index="${i}">${escapeHtml(r.display_name)}</div>
-    `).join('');
+      suggestionsBox.innerHTML = results.map((r, i) => `
+        <div class="suggestion" data-index="${i}">${escapeHtml(r.display_name)}</div>
+      `).join('');
 
-    suggestionsBox.querySelectorAll('.suggestion').forEach(el => {
-      el.addEventListener('click', () => {
-        const r = results[Number(el.dataset.index)];
-        document.getElementById('propertyAddress').value = r.display_name;
-        addressVerified = true;
-        const statusEl = document.getElementById('addressStatus');
-        statusEl.textContent = '✓ Matched address';
-        statusEl.className = 'address-status verified';
-        suggestionsBox.classList.remove('show');
+      suggestionsBox.querySelectorAll('.suggestion').forEach(el => {
+        el.addEventListener('click', () => {
+          const r = results[Number(el.dataset.index)];
+          input.value = r.display_name;
+          verified = true;
+          statusEl.textContent = '✓ Matched address';
+          statusEl.className = 'address-status verified';
+          suggestionsBox.classList.remove('show');
+        });
       });
-    });
-  } catch (err) {
-    suggestionsBox.innerHTML = '<div class="suggestion-loading">Couldn\'t reach address lookup — you can still type it manually</div>';
+    } catch (err) {
+      suggestionsBox.innerHTML = '<div class="suggestion-loading">Couldn\'t reach address lookup — you can still type it manually</div>';
+    }
   }
+
+  return {
+    isVerified: () => verified,
+    reset: () => {
+      verified = false;
+      statusEl.textContent = '';
+      statusEl.className = 'address-status';
+      suggestionsBox.innerHTML = '';
+      suggestionsBox.classList.remove('show');
+    }
+  };
 }
 
 function showToast(msg) {
@@ -620,14 +737,12 @@ async function submitRating() {
   try {
     await fetch(SCRIPT_URL, {
       method: 'POST',
-      body: JSON.stringify({ propertyAddress, raterName, notes, addressVerified, ...ratings, ...checklist })
+      body: JSON.stringify({ propertyAddress, raterName, notes, addressVerified: ratingAddressLookup.isVerified(), ...ratings, ...checklist })
     });
     showToast('Rating saved');
     document.getElementById('propertyAddress').value = '';
     document.getElementById('notes').value = '';
-    document.getElementById('addressStatus').textContent = '';
-    document.getElementById('addressStatus').className = 'address-status';
-    addressVerified = false;
+    ratingAddressLookup.reset();
     buildCriteriaUI();
     buildChecklistUI();
   } catch (err) {
@@ -635,6 +750,139 @@ async function submitRating() {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Save rating';
+  }
+}
+
+async function submitViewing() {
+  const propertyAddress = document.getElementById('viewingAddress').value.trim();
+  const viewingDate = document.getElementById('viewingDate').value;
+  const startTime = document.getElementById('viewingStartTime').value;
+  const endTime = document.getElementById('viewingEndTime').value;
+  const addedBy = document.getElementById('viewingAddedBy').value.trim();
+  const notes = document.getElementById('viewingNotes').value.trim();
+
+  if (!propertyAddress || !viewingDate || !startTime) {
+    showToast('Add an address, date and start time');
+    return;
+  }
+
+  const btn = document.getElementById('saveViewingBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  try {
+    const res = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'addViewing',
+        propertyAddress,
+        addressVerified: viewingAddressLookup.isVerified(),
+        viewingDate,
+        startTime,
+        endTime,
+        addedBy,
+        notes
+      })
+    });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error);
+
+    showToast('Viewing saved');
+    document.getElementById('viewingAddress').value = '';
+    document.getElementById('viewingDate').value = '';
+    document.getElementById('viewingStartTime').value = '';
+    document.getElementById('viewingEndTime').value = '';
+    document.getElementById('viewingNotes').value = '';
+    viewingAddressLookup.reset();
+    document.getElementById('addViewingCard').open = false;
+    loadUpcomingViewings();
+  } catch (err) {
+    showToast('Could not save viewing');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save viewing';
+  }
+}
+
+async function loadUpcomingViewings() {
+  const listEl = document.getElementById('upcomingList');
+  listEl.innerHTML = '<div class="empty-state">Loading...</div>';
+
+  try {
+    const res = await fetch(`${SCRIPT_URL}?action=viewings`);
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error);
+    renderUpcomingViewings(json.data);
+  } catch (err) {
+    listEl.innerHTML = `<div class="empty-state"><div class="stamp-icon">&#9888;</div>Couldn't load upcoming viewings.</div>`;
+  }
+}
+
+function renderUpcomingViewings(rows) {
+  const listEl = document.getElementById('upcomingList');
+  if (!rows.length) {
+    listEl.innerHTML = `<div class="empty-state"><div class="stamp-icon">&#128197;</div>No upcoming viewings yet.<br>Add the next open home above.</div>`;
+    return;
+  }
+
+  const grouped = {};
+  rows.forEach(r => {
+    const date = r['Viewing Date'];
+    if (!grouped[date]) grouped[date] = [];
+    grouped[date].push(r);
+  });
+
+  listEl.innerHTML = Object.entries(grouped).map(([date, entries]) => `
+    <div class="viewing-day">
+      <div class="viewing-day-title">${formatViewingDate(date)}</div>
+      ${entries.map(v => {
+        const time = v['End Time'] ? `${formatViewingTime(v['Start Time'])}–${formatViewingTime(v['End Time'])}` : formatViewingTime(v['Start Time']);
+        return `
+          <div class="viewing-card">
+            <div class="viewing-card-head">
+              <div class="viewing-time">${escapeHtml(time)}</div>
+              <div>
+                <div class="viewing-address">${escapeHtml(v['Property Address'])}</div>
+                ${v['Added By'] ? `<div class="viewing-meta">Added by ${escapeHtml(v['Added By'])}</div>` : ''}
+              </div>
+            </div>
+            ${v.Notes ? `<div class="viewing-notes">${escapeHtml(v.Notes)}</div>` : ''}
+            <button type="button" class="remove-viewing" onclick="removeViewing('${v.ID}')">Remove</button>
+          </div>`;
+      }).join('')}
+    </div>
+  `).join('');
+}
+
+function formatViewingDate(dateStr) {
+  const d = new Date(`${dateStr}T12:00:00`);
+  return new Intl.DateTimeFormat('en-NZ', {
+    weekday: 'long', day: 'numeric', month: 'long'
+  }).format(d);
+}
+
+function formatViewingTime(timeStr) {
+  if (!timeStr) return '';
+  const [hour, minute] = timeStr.split(':').map(Number);
+  const d = new Date(2000, 0, 1, hour, minute || 0);
+  return new Intl.DateTimeFormat('en-NZ', {
+    hour: 'numeric', minute: '2-digit'
+  }).format(d);
+}
+
+async function removeViewing(id) {
+  if (!confirm('Remove this viewing?')) return;
+  try {
+    const res = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'deleteViewing', id })
+    });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error);
+    showToast('Viewing removed');
+    loadUpcomingViewings();
+  } catch (err) {
+    showToast('Could not remove viewing');
   }
 }
 
@@ -740,6 +988,12 @@ function escapeHtml(str) {
 }
 
 // Tab switching
+const VIEW_TITLES = {
+  rate: 'Rate a home',
+  upcoming: 'Upcoming viewings',
+  compare: 'Compare homes'
+};
+
 document.querySelectorAll('nav.tabs button').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('nav.tabs button').forEach(b => b.classList.remove('active'));
@@ -747,12 +1001,14 @@ document.querySelectorAll('nav.tabs button').forEach(btn => {
     const view = btn.dataset.view;
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById('view-' + view).classList.add('active');
-    document.getElementById('pageTitle').textContent = view === 'rate' ? 'Rate a home' : 'Compare homes';
+    document.getElementById('pageTitle').textContent = VIEW_TITLES[view];
+    if (view === 'upcoming') loadUpcomingViewings();
     if (view === 'compare') loadCompareView();
   });
 });
 
 document.getElementById('submitBtn').addEventListener('click', submitRating);
+document.getElementById('saveViewingBtn').addEventListener('click', submitViewing);
 
 if (SCRIPT_URL.indexOf('PASTE_YOUR') === 0) {
   document.getElementById('configWarning').style.display = 'block';
@@ -760,7 +1016,8 @@ if (SCRIPT_URL.indexOf('PASTE_YOUR') === 0) {
 
 buildCriteriaUI();
 buildChecklistUI();
-setupAddressAutocomplete();
+const ratingAddressLookup = setupAddressAutocomplete('propertyAddress', 'addressSuggestions', 'addressStatus');
+const viewingAddressLookup = setupAddressAutocomplete('viewingAddress', 'viewingAddressSuggestions', 'viewingAddressStatus');
 </script>
 
 </body>
